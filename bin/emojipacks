@@ -5,6 +5,7 @@ var Prompt = require('../lib/prompt');
 var Slack = require('../lib/slack');
 var Pack = require('../lib/pack');
 var co = require('co');
+var inquirer = require('inquirer');
 
 /**
  * Usage.
@@ -23,18 +24,82 @@ program
  * Start process.
  */
 
-co(function *() {
-  var user = yield Prompt.start(program.subdomain, program.email, program.password, program.pack);
-  var pack = yield Pack.get(user.pack);
-  pack = clean(pack);
-  user.emojis = pack.emojis;
-  var slack = new Slack(user, program.debug);
-  yield slack.import();
-  process.exit();
+co(function* () {
+  inquirer.registerPrompt('filePath', require('inquirer-file-path'));
+  inquirer.prompt([
+    {
+      type: 'input',
+      message: 'Enter Slack Subdomain:',
+      name: 'subdomain',
+
+      validate: function (answer) {
+        var match = answer.match(/^[0-9a-zA-Z\-]+$/);
+        return (match) ? true : 'Please enter a valid slack Subdomain (letters, numbers and slashes)';
+      },
+      filter: function (test) {
+        debugger;
+        return 'https://' + test + '.slack.com';
+      },
+      when: function (answer) {
+        return program.subdomain
+      }
+    },
+    {
+      type: 'input',
+      message: 'email',
+      name: 'email',
+
+      validate: function (value) {
+        var pass = value.match(/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/);
+        return (pass) ? true : 'Please enter a valid email';
+      },
+      when: function (answer) {
+        return !program.email
+      },
+    },
+    {
+      type: 'password',
+      message: 'Password for admin email:',
+      name: 'password',
+      when: function (answer) {
+        return !program.password
+      },
+
+    },
+    {
+      type: 'filePath',
+      message: 'Name of the pack(yaml):',
+      name: 'pack',
+      basePath: './',
+      when: function (answer) {
+        return !program.pack
+      }
+
+
+    }]
+  ).then(function (user) {
+
+    console.log(user),
+
+      process.exit();
+  })
+  // var user = yield Prompt.start(program.subdomain, program.email, program.password, program.pack);
+  // var pack = yield Pack.get(user.pack);
+  // pack = clean(pack);
+  // user.emojis = pack.emojis;
+  // var slack = new Slack(user, program.debug);
+  // try {
+  //   yield slack.import();
+  // } catch (e) {
+  //   console.error(getStack(e.message, e.stack));
+  // }
+  // process.exit();
 });
 
 /**
  * Standardize the emoji file.
+ * @param {Array} object - Yaml to object list
+ * @returns {Array} List of emojis standarized and sorted by name
  */
 
 function clean(object) {
@@ -45,5 +110,27 @@ function clean(object) {
       object.emojis.push(object[i]);
     }
   }
+
+  object.emojis.sort(function compare(a, b) {
+    if (a.name < b.name) {
+      return -1;
+    }
+    if (a.name > b.name) {
+      return 1;
+    }
+    return 0;
+  });
   return object;
+}
+/**
+ * Get the full stack without error message. This is for the error that can be 
+ * happening and allows the program to exit properly.
+ * @param {String} errorMsg - Error message to be deleted from the stack
+ * @param {String} stack - Full stac trace
+ * @returns {String} Full stack without error message
+ */
+function getStack(errorMsg, stack) {
+  var error = stack.split("Error: " + errorMsg + '\n');
+
+  return error[1];
 }

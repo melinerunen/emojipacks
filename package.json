@@ -46,8 +46,10 @@
   },
   "devDependencies": {
     "grunt": "^0.4.3",
+    "grunt-cli": "^0.1.13",
     "grunt-yaml-validator": "^0.7.3",
-    "grunt-cli": "^0.1.13"
+    "inquirer": "^3.3.0",
+    "inquirer-file-path": "^1.0.0"
   },
   "scripts": {
     "test": "grunt travis --verbose"
