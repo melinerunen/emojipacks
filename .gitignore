@@ -58,8 +58,16 @@ typings/
 .env
 
 # Emojipacks Specific Files
+
 ./test
 resized/
 
 # Ignore actual batchUpload.sh
 batchUpload.sh
+
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 
-var program = require('commander');
-var Prompt = require('../lib/prompt');
+var Program = require('commander');
 var Slack = require('../lib/slack');
 var Pack = require('../lib/pack');
 var co = require('co');
-var inquirer = require('inquirer');
+var Inquirer = require('inquirer');
+var Valid = require('../lib/valid');
 
 /**
  * Usage.
  */
 
-program
+Program
   .version(require('../package').version)
   .option('-d, --debug', 'Run in debug mode')
   .option('-s, --subdomain [value]', 'Your Slack subdomain')
@@ -25,23 +25,17 @@ program
  */
 
 co(function* () {
-  inquirer.registerPrompt('filePath', require('inquirer-file-path'));
-  inquirer.prompt([
+  var user = yield Inquirer.prompt([
     {
       type: 'input',
       message: 'Enter Slack Subdomain:',
       name: 'subdomain',
 
-      validate: function (answer) {
-        var match = answer.match(/^[0-9a-zA-Z\-]+$/);
-        return (match) ? true : 'Please enter a valid slack Subdomain (letters, numbers and slashes)';
-      },
-      filter: function (test) {
-        debugger;
-        return 'https://' + test + '.slack.com';
+      validate: function (subdomain) {
+        return (Valid.subdomain(subdomain)) ? true : 'Please enter a valid slack Subdomain (letters, numbers and slashes)';
       },
       when: function (answer) {
-        return program.subdomain
+        return !Program.subdomain;
       }
     },
     {
@@ -49,56 +43,62 @@ co(function* () {
       message: 'email',
       name: 'email',
 
-      validate: function (value) {
-        var pass = value.match(/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/);
-        return (pass) ? true : 'Please enter a valid email';
+      validate: function (email) {
+        return (Valid.email(email)) ? true : 'Please enter a valid email';
       },
       when: function (answer) {
-        return !program.email
+        return !Program.email
       },
     },
     {
       type: 'password',
       message: 'Password for admin email:',
       name: 'password',
+      validate: function (password) {
+        return (Valid.password(password)) ? true : 'Enter a password';
+      },
       when: function (answer) {
-        return !program.password
+        return !Program.password
       },
 
     },
     {
-      type: 'filePath',
+      type: 'input',
       message: 'Name of the pack(yaml):',
       name: 'pack',
-      basePath: './',
+      validate: function (pack) {
+        return (Valid.pack(pack)) ? true : 'Enter a valid file';
+      },
       when: function (answer) {
-        return !program.pack
+        return !Program.pack
       }
 
 
     }]
-  ).then(function (user) {
+  ).then(function (answers) {
+    // Prioritice the ones issued by the argument
+    return {
+      url: 'https://' + ((Program.subdomain) ? Program.subdomain : answers.subdomain) + '.slack.com',
+      email: (Program.email) ? Program.email : answers.email,
+      password: (Program.password) ? Program.password : answers.password,
+      pack: (Program.pack) ? Program.pack : answers.pack
+    }
+  });
 
-    console.log(user),
-
-      process.exit();
-  })
-  // var user = yield Prompt.start(program.subdomain, program.email, program.password, program.pack);
-  // var pack = yield Pack.get(user.pack);
-  // pack = clean(pack);
-  // user.emojis = pack.emojis;
-  // var slack = new Slack(user, program.debug);
-  // try {
-  //   yield slack.import();
-  // } catch (e) {
-  //   console.error(getStack(e.message, e.stack));
-  // }
-  // process.exit();
+  var pack = yield clean(Pack.get(user.pack));
+  user.emojis = pack.emojis;
+  var slack = new Slack(user, Program.debug);
+  try {
+    yield slack.import();
+  } catch (e) {
+    console.error(getStack(e.message, e.stack));
+  }
+  process.exit();
 });
 
 /**
  * Standardize the emoji file.
- * @param {Array} object - Yaml to object list
+ * @param {Object} object - Yaml to object list
  * @returns {Array} List of emojis standarized and sorted by name
  */
 
